@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Integration Demo (WhatsApp & LINE)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; color: #333; background-color: #f4f6f8; }
+        h1 { text-align: center; margin-bottom: 30px; color: #2c3e50; }
+        
+        .tabs { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 20px; background: #fff; padding: 0 10px; border-radius: 8px 8px 0 0; }
+        .tab-btn { padding: 15px 25px; border: none; background: none; font-size: 16px; cursor: pointer; color: #666; font-weight: 500; outline: none; border-bottom: 3px solid transparent; }
+        .tab-btn.active { color: #007bff; border-bottom: 3px solid #007bff; font-weight: bold; }
+        .tab-btn:hover:not(.active) { background-color: #f8f8f8; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        
+        .card { background: #fff; border: 1px solid #e1e4e8; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .section-title { margin-top: 0; margin-bottom: 20px; font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; color: #555; }
+        input, textarea, select { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; transition: border 0.2s; }
+        input:focus, textarea:focus, select:focus { border-color: #007bff; outline: none; }
+        textarea { resize: vertical; }
+        
+        .config-section { background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px dashed #ccc; }
+        .config-toggle { font-size: 12px; color: #007bff; cursor: pointer; text-decoration: underline; font-weight: normal; }
+        
+        button.send-btn { width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; font-size: 16px; font-weight: 600; transition: background-color 0.2s; }
+        button.send-btn:hover { background-color: #0056b3; }
+        button.action-btn { padding: 8px 15px; background-color: #28a745; color: white; border: none; cursor: pointer; border-radius: 4px; font-size: 14px; }
+        button.action-btn:hover { background-color: #218838; }
+        
+        .status-bar { padding: 10px 15px; margin-bottom: 25px; background-color: #fff; border-radius: 6px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e1e4e8; }
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: bold; color: white; }
+        .status-badge.real { background-color: #28a745; }
+        .status-badge.mock { background-color: #ffc107; color: #333; }
+        
+        pre { background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 13px; margin-top: 20px; max-height: 200px; }
+        .error-msg { color: #dc3545; margin-top: 10px; font-size: 14px; }
+        
+        /* Inbox Styles */
+        .inbox-container { height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; background: #f9f9f9; padding: 10px; }
+        .message-item { background: #fff; padding: 10px; margin-bottom: 10px; border-radius: 6px; border-left: 4px solid #ccc; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .message-item.whatsapp { border-left-color: #25D366; }
+        .message-item.line { border-left-color: #00B900; }
+        .msg-header { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12px; color: #888; }
+        .msg-sender { font-weight: bold; color: #333; }
+        .msg-content { font-size: 14px; line-height: 1.4; }
+        .msg-tag { display: inline-block; padding: 2px 6px; background: #eee; border-radius: 4px; font-size: 10px; margin-right: 5px; text-transform: uppercase; }
+        .msg-tag.incoming { background: #e3f2fd; color: #0d47a1; }
+        .msg-tag.outgoing { background: #e8f5e9; color: #1b5e20; }
+        .empty-state { text-align: center; color: #999; padding: 40px 0; font-style: italic; }
+
+        .profile-result { display: flex; align-items: center; margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px; }
+        .profile-img { width: 50px; height: 50px; border-radius: 50%; margin-right: 15px; background: #ddd; }
+    </style>
+</head>
+<body>
+    <h1>CRM Integration Demo</h1>
+    
+    <div class="status-bar" id="systemStatus">
+        <span>Loading system status...</span>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="openTab('whatsapp')">WhatsApp CRM</button>
+        <button class="tab-btn" onclick="openTab('line')">LINE CRM</button>
+        <button class="tab-btn" onclick="openTab('inbox')">Unified Inbox (Webhook Log)</button>
+    </div>
+
+    <!-- WhatsApp Tab -->
+    <div id="whatsapp" class="tab-content active">
+        <div class="grid-layout">
+            <!-- Send Message -->
+            <div class="card">
+                <h3 class="section-title">
+                    Send Message
+                    <span class="config-toggle" onclick="toggleConfig('wa-config')">Settings</span>
+                </h3>
+                
+                <div id="wa-config" class="config-section" style="display: none;">
+                    <div class="form-group">
+                        <label for="wa-api-token">API Token</label>
+                        <input type="password" id="wa-api-token" placeholder="Leave empty for .env/MOCK">
+                    </div>
+                    <div class="form-group">
+                        <label for="wa-phone-id">Phone ID</label>
+                        <input type="text" id="wa-phone-id" placeholder="Leave empty for .env/MOCK">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="wa-to">To (Phone Number)</label>
+                    <input type="text" id="wa-to" placeholder="e.g., 15551234567">
+                </div>
+                <div class="form-group">
+                    <label for="wa-text">Text Message</label>
+                    <textarea id="wa-text" rows="3" placeholder="Hello customer..."></textarea>
+                </div>
+                <button class="send-btn" onclick="sendMessage('whatsapp')">Send Text</button>
+                <div id="wa-result"></div>
+            </div>
+
+            <!-- CRM Features -->
+            <div class="card">
+                <h3 class="section-title">CRM Advanced Features</h3>
+                
+                <div class="form-group">
+                    <label>Send Template Message (Notification)</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="wa-tpl-name" placeholder="Template Name (e.g. hello_world)" value="hello_world">
+                        <input type="text" id="wa-tpl-lang" placeholder="Lang Code" value="en_US" style="width: 80px;">
+                    </div>
+                    <button class="action-btn" style="width: 100%; margin-top: 10px;" onclick="sendTemplate()">Send Template</button>
+                </div>
+                <div id="wa-tpl-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LINE Tab -->
+    <div id="line" class="tab-content">
+        <div class="grid-layout">
+            <!-- Send Message -->
+            <div class="card">
+                <h3 class="section-title">
+                    Send Message
+                    <span class="config-toggle" onclick="toggleConfig('line-config')">Settings</span>
+                </h3>
+                
+                <div id="line-config" class="config-section" style="display: none;">
+                    <div class="form-group">
+                        <label for="line-token">Channel Access Token</label>
+                        <input type="password" id="line-token" placeholder="Leave empty for .env/MOCK">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="line-to">To (User ID)</label>
+                    <input type="text" id="line-to" placeholder="e.g., U1234567890abcdef...">
+                </div>
+                <div class="form-group">
+                    <label for="line-text">Text Message</label>
+                    <textarea id="line-text" rows="3" placeholder="Hello customer..."></textarea>
+                </div>
+                <button class="send-btn" onclick="sendMessage('line')">Send Text</button>
+                <div id="line-result"></div>
+            </div>
+
+            <!-- CRM Features -->
+            <div class="card">
+                <h3 class="section-title">CRM Advanced Features</h3>
+                
+                <div class="form-group">
+                    <label>Get User Profile</label>
+                    <input type="text" id="line-profile-id" placeholder="User ID to fetch">
+                    <button class="action-btn" style="width: 100%; margin-top: 10px;" onclick="getLineProfile()">Fetch Profile</button>
+                </div>
+                <div id="line-profile-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inbox Tab -->
+    <div id="inbox" class="tab-content">
+        <div class="card">
+            <h3 class="section-title">
+                Unified Inbox (Live Webhook Events)
+                <button class="action-btn" style="font-size: 12px; padding: 4px 10px;" onclick="loadMessages()">Refresh</button>
+            </h3>
+            <div class="inbox-container" id="messageList">
+                <div class="empty-state">No messages received yet...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Core Logic ---
+        function openTab(tabName) {
+            Array.from(document.getElementsByClassName('tab-content')).forEach(el => el.classList.remove('active'));
+            Array.from(document.getElementsByClassName('tab-btn')).forEach(el => el.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.currentTarget.classList.add('active');
+            
+            // Clear results and errors when switching tabs
+            ['wa-result', 'wa-tpl-result', 'line-result', 'line-profile-result'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.innerHTML = '';
+            });
+
+            if(tabName === 'inbox') loadMessages();
+        }
+
+        function toggleConfig(id) {
+            const el = document.getElementById(id);
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function getConfig(platform) {
+            if (platform === 'whatsapp') {
+                return {
+                    apiToken: document.getElementById('wa-api-token').value || undefined,
+                    phoneNumberId: document.getElementById('wa-phone-id').value || undefined
+                };
+            } else {
+                return {
+                    channelAccessToken: document.getElementById('line-token').value || undefined
+                };
+            }
+        }
+
+        // --- API Calls ---
+
+        async function loadStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                document.getElementById('systemStatus').innerHTML = `
+                    <div><strong>Server Status:</strong> ${data.status}</div>
+                    <div>
+                        WA: <span class="status-badge ${data.whatsapp.mode}">${data.whatsapp.mode.toUpperCase()}</span>
+                        LINE: <span class="status-badge ${data.line.mode}">${data.line.mode.toUpperCase()}</span>
+                    </div>
+                `;
+            } catch (e) {
+                document.getElementById('systemStatus').innerHTML = `<span class="error-msg">Failed to connect to server</span>`;
+            }
+        }
+
+        async function sendMessage(platform) {
+            const resultDiv = document.getElementById(platform === 'whatsapp' ? 'wa-result' : 'line-result');
+            resultDiv.innerHTML = '<div style="color:#666;">Sending...</div>';
+            
+            const to = document.getElementById(platform === 'whatsapp' ? 'wa-to' : 'line-to').value;
+            const text = document.getElementById(platform === 'whatsapp' ? 'wa-text' : 'line-text').value;
+
+            try {
+                const response = await fetch(`/api/send-${platform}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to, text, config: getConfig(platform) })
+                });
+                const result = await response.json();
+                resultDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                loadMessages(); // Refresh inbox if open
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function sendTemplate() {
+            const resultDiv = document.getElementById('wa-tpl-result');
+            resultDiv.innerHTML = '<div style="color:#666;">Sending Template...</div>';
+            
+            const to = document.getElementById('wa-to').value;
+            const templateName = document.getElementById('wa-tpl-name').value;
+            const language = document.getElementById('wa-tpl-lang').value;
+
+            if (!to) { resultDiv.innerHTML = '<div class="error-msg">Please enter a phone number above</div>'; return; }
+
+            try {
+                const response = await fetch('/api/send-whatsapp-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to, templateName, language, config: getConfig('whatsapp') })
+                });
+                const result = await response.json();
+                resultDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                loadMessages();
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function getLineProfile() {
+            const resultDiv = document.getElementById('line-profile-result');
+            resultDiv.innerHTML = '<div style="color:#666;">Fetching Profile...</div>';
+            
+            const userId = document.getElementById('line-profile-id').value;
+            if (!userId) { resultDiv.innerHTML = '<div class="error-msg">Please enter a User ID</div>'; return; }
+
+            try {
+                const response = await fetch('/api/line/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, config: getConfig('line') })
+                });
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    const p = result.data;
+                    resultDiv.innerHTML = `
+                        <div class="profile-result">
+                            <img src="${p.pictureUrl}" class="profile-img" onerror="this.src='https://via.placeholder.com/50'">
+                            <div>
+                                <div style="font-weight:bold;">${p.displayName}</div>
+                                <div style="font-size:12px; color:#666;">${p.statusMessage || 'No status message'}</div>
+                            </div>
+                        </div>
+                        <pre style="margin-top:10px;">${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function loadMessages() {
+            try {
+                const response = await fetch('/api/messages');
+                const messages = await response.json();
+                const container = document.getElementById('messageList');
+                
+                if (messages.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No messages logged yet... Send a message or trigger a webhook to see data here.</div>';
+                    return;
+                }
+
+                container.innerHTML = messages.map(msg => `
+                    <div class="message-item ${msg.platform}">
+                        <div class="msg-header">
+                            <span class="msg-tag ${msg.type}">${msg.type}</span>
+                            <span>${new Date(msg.timestamp).toLocaleString()}</span>
+                        </div>
+                        <div class="msg-sender">
+                            ${msg.platform.toUpperCase()} - ${msg.type === 'incoming' ? (msg.senderName || msg.from) : ('To: ' + msg.to)}
+                        </div>
+                        <div class="msg-content">${msg.content}</div>
+                        ${msg.status ? `<div style="font-size:11px; margin-top:4px; color:#888;">Status: ${msg.status}</div>` : ''}
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error("Failed to load messages", e);
+            }
+        }
+
+        // Initialize
+        loadStatus();
+        
+        // Auto-fill To field if typing in one tab, sync to others for convenience? Maybe not.
+        // Auto-refresh inbox if active
+        setInterval(() => {
+            if(document.getElementById('inbox').classList.contains('active')) loadMessages();
+        }, 5000);
+    </script>
+</body>
+</html>
