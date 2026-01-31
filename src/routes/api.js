@@ -98,4 +98,17 @@ router.post('/line/profile', async (req, res) => {
     }
 });
 
+router.post('/line/token', async (req, res) => {
+    const { channelId, channelSecret } = req.body;
+    if (!channelId || !channelSecret) {
+        return res.status(400).json({ error: 'Missing "channelId" or "channelSecret"' });
+    }
+    try {
+        const result = await lineService.issueAccessToken(channelId, channelSecret);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

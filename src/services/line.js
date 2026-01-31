@@ -3,15 +3,19 @@ const { config, isLineMock } = require('../config');
 
 const getEffectiveConfig = (overrides) => {
     const channelAccessToken = overrides.channelAccessToken || config.line.channelAccessToken;
+    const channelSecret = overrides.channelSecret || config.line.channelSecret;
     const isMock = overrides.channelAccessToken ? !channelAccessToken : isLineMock();
-    return { channelAccessToken, isMock };
+    return { channelAccessToken, channelSecret, isMock };
 };
 
 const sendMessage = async (to, text, overrides = {}) => {
     const { channelAccessToken, isMock } = getEffectiveConfig(overrides);
+    
+    // Ensure 'to' is a string and trimmed
+    const cleanTo = String(to).trim();
 
     if (isMock) {
-        console.log(`[MOCK] LINE sendMessage to ${to}: ${text}`);
+        console.log(`[MOCK] LINE sendMessage to ${cleanTo}: ${text}`);
         return { success: true, mode: 'mock', messageId: 'mock-msg-id-' + Date.now() };
     }
 
@@ -20,7 +24,7 @@ const sendMessage = async (to, text, overrides = {}) => {
         const response = await axios.post(
             url,
             {
-                to: to,
+                to: cleanTo,
                 messages: [
                     {
                         type: 'text',
@@ -44,15 +48,16 @@ const sendMessage = async (to, text, overrides = {}) => {
 
 const getUserProfile = async (userId, overrides = {}) => {
     const { channelAccessToken, isMock } = getEffectiveConfig(overrides);
+    const cleanUserId = String(userId).trim();
 
     if (isMock) {
-        console.log(`[MOCK] LINE getUserProfile for ${userId}`);
+        console.log(`[MOCK] LINE getUserProfile for ${cleanUserId}`);
         return { 
             success: true, 
             mode: 'mock', 
             data: {
-                userId,
-                displayName: "Mock User " + userId.substr(0, 4),
+                userId: cleanUserId,
+                displayName: "Mock User " + cleanUserId.substr(0, 4),
                 pictureUrl: "https://via.placeholder.com/150",
                 statusMessage: "Hello, I am a mock user!"
             }
@@ -60,7 +65,7 @@ const getUserProfile = async (userId, overrides = {}) => {
     }
 
     try {
-        const url = `https://api.line.me/v2/bot/profile/${userId}`;
+        const url = `https://api.line.me/v2/bot/profile/${cleanUserId}`;
         const response = await axios.get(
             url,
             {
@@ -117,8 +122,69 @@ const handleWebhook = (body) => {
     return null;
 };
 
+const issueAccessToken = async (clientId, clientSecret) => {
+    try {
+        const params = new URLSearchParams();
+        params.append('grant_type', 'client_credentials');
+        params.append('client_id', clientId);
+        params.append('client_secret', clientSecret);
+
+        const response = await axios.post(
+            'https://api.line.me/v2/oauth/accessToken',
+            params,
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+            }
+        );
+        return response.data; // { access_token, expires_in, token_type }
+    } catch (error) {
+        console.error('Error issuing LINE access token:', error.response ? error.response.data : error.message);
+        throw new Error('Failed to issue access token: ' + (error.response?.data?.error_description || error.message));
+    }
+};
+
+const replyMessage = async (replyToken, text, overrides = {}) => {
+    const { channelAccessToken, isMock } = getEffectiveConfig(overrides);
+
+    if (isMock) {
+        console.log(`[MOCK] LINE replyMessage to token ${replyToken}: ${text}`);
+        return { success: true, mode: 'mock' };
+    }
+
+    try {
+        const url = 'https://api.line.me/v2/bot/message/reply';
+        await axios.post(
+            url,
+            {
+                replyToken: replyToken,
+                messages: [
+                    {
+                        type: 'text',
+                        text: text
+                    }
+                ]
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${channelAccessToken}`,
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+        return { success: true, mode: 'real' };
+    } catch (error) {
+        console.error('Error replying LINE message:', error.response ? error.response.data : error.message);
+        // Don't throw to avoid crashing webhook handler
+        return { success: false, error: error.message };
+    }
+};
+
 module.exports = {
     sendMessage,
+    replyMessage,
     getUserProfile,
-    handleWebhook
+    handleWebhook,
+    issueAccessToken
 };

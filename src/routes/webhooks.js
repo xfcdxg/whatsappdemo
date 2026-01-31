@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const whatsappService = require('../services/whatsapp');
 const lineService = require('../services/line');
 const { config } = require('../config');
@@ -48,6 +49,28 @@ router.post('/whatsapp', (req, res) => {
 
 // LINE Webhook Event
 router.post('/line', (req, res) => {
+    // 签名验证
+    const channelSecret = config.line.channelSecret;
+    const signature = req.headers['x-line-signature'];
+
+    if (channelSecret && signature) {
+        const body = req.rawBody; // 需要在 index.js 中配置 bodyParser 获取 rawBody
+        const hash = crypto
+            .createHmac('sha256', channelSecret)
+            .update(body)
+            .digest('base64');
+
+        if (hash !== signature) {
+            console.error('Invalid LINE signature');
+            return res.status(401).send('Invalid signature');
+        }
+    } else if (channelSecret && !signature) {
+         console.warn('Missing LINE signature');
+         // 依然允许通过，或者是拒绝？通常应该拒绝。但在调试模式下可能没有。
+         // 为了安全，如果配置了 Secret，就必须有签名。
+         return res.status(401).send('Missing signature');
+    }
+
     res.sendStatus(200);
 
     const result = lineService.handleWebhook(req.body);
@@ -60,6 +83,12 @@ router.post('/line', (req, res) => {
                 status: 'received',
                 raw: result.raw
             });
+            
+            // Auto-reply to verify connectivity (especially for Free Plan accounts)
+            if (result.raw && result.raw.replyToken) {
+                lineService.replyMessage(result.raw.replyToken, `Echo: ${result.content}`);
+            }
+            
         } else if (result.type === 'follow') {
             store.addMessage('line', {
                 type: 'system',

@@ -16,9 +16,9 @@ const sendMessage = async (to, text, overrides = {}) => {
         console.log(`[MOCK] WhatsApp sendMessage to ${to}: ${text}`);
         return { success: true, mode: 'mock', messageId: 'mock-msg-id-' + Date.now() };
     }
-
+//https://graph.facebook.com/v22.0/979428401918017/messages
     try {
-        const url = `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`;
+        const url = `https://graph.facebook.com/v22.0/${phoneNumberId}/messages`;
         const response = await axios.post(
             url,
             {
@@ -50,7 +50,7 @@ const sendTemplateMessage = async (to, templateName, languageCode = 'en_US', ove
     }
 
     try {
-        const url = `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`;
+        const url = `https://graph.facebook.com/v22.0/${phoneNumberId}/messages`;
         const response = await axios.post(
             url,
             {

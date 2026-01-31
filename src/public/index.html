@@ -135,8 +135,20 @@
                 
                 <div id="line-config" class="config-section" style="display: none;">
                     <div class="form-group">
+                        <label for="line-channel-id">Channel ID</label>
+                        <input type="text" id="line-channel-id" placeholder="Optional - for reference">
+                    </div>
+                    <div class="form-group">
+                        <label for="line-channel-secret">Channel Secret</label>
+                        <input type="password" id="line-channel-secret" placeholder="Used for Webhook verification">
+                    </div>
+                    <div class="form-group">
                         <label for="line-token">Channel Access Token</label>
-                        <input type="password" id="line-token" placeholder="Leave empty for .env/MOCK">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="line-token" placeholder="Leave empty for .env/MOCK" style="flex: 1; min-width: 0;">
+                            <button class="action-btn" onclick="generateLineToken()" style="width: auto; white-space: nowrap; font-size: 12px; padding: 0 10px;">Generate</button>
+                        </div>
+                        <div id="line-token-msg" style="font-size: 12px; margin-top: 4px; color: #666;"></div>
                     </div>
                 </div>
 
@@ -181,6 +193,42 @@
 
     <script>
         // --- Core Logic ---
+        async function generateLineToken() {
+            const channelId = document.getElementById('line-channel-id').value;
+            const channelSecret = document.getElementById('line-channel-secret').value;
+            const msgEl = document.getElementById('line-token-msg');
+            const tokenInput = document.getElementById('line-token');
+
+            if (!channelId || !channelSecret) {
+                msgEl.style.color = '#dc3545';
+                msgEl.textContent = 'Channel ID and Secret are required';
+                return;
+            }
+
+            msgEl.style.color = '#666';
+            msgEl.textContent = 'Generating...';
+
+            try {
+                const response = await fetch('/api/line/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ channelId, channelSecret })
+                });
+                const result = await response.json();
+
+                if (result.access_token) {
+                    tokenInput.value = result.access_token;
+                    msgEl.style.color = '#28a745';
+                    msgEl.textContent = `Token generated! Expires in ${Math.floor(result.expires_in / 86400)} days.`;
+                } else {
+                    throw new Error(result.error || result.message || 'Unknown error');
+                }
+            } catch (e) {
+                msgEl.style.color = '#dc3545';
+                msgEl.textContent = 'Error: ' + e.message;
+            }
+        }
+
         function openTab(tabName) {
             Array.from(document.getElementsByClassName('tab-content')).forEach(el => el.classList.remove('active'));
             Array.from(document.getElementsByClassName('tab-btn')).forEach(el => el.classList.remove('active'));
@@ -209,7 +257,9 @@
                 };
             } else {
                 return {
-                    channelAccessToken: document.getElementById('line-token').value || undefined
+                    channelAccessToken: document.getElementById('line-token').value || undefined,
+                    channelSecret: document.getElementById('line-channel-secret').value || undefined,
+                    channelId: document.getElementById('line-channel-id').value || undefined
                 };
             }
         }
