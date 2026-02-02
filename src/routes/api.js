@@ -75,6 +75,26 @@ router.post('/send-line', async (req, res) => {
     }
 });
 
+router.post('/send-line-broadcast', async (req, res) => {
+    const { text, config } = req.body;
+    if (!text) {
+        return res.status(400).json({ error: 'Missing "text" parameter' });
+    }
+    try {
+        const result = await lineService.broadcastMessage(text, config);
+        store.addMessage('line', {
+            type: 'outgoing',
+            to: 'ALL (Broadcast)',
+            content: text,
+            status: 'sent',
+            mode: result.mode
+        });
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 router.get('/line/profile', async (req, res) => {
     const { userId, config } = req.query;
     // Note: GET request with config passed as query string needs parsing, 

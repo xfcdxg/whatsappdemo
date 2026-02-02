@@ -181,8 +181,44 @@ const replyMessage = async (replyToken, text, overrides = {}) => {
     }
 };
 
+const broadcastMessage = async (text, overrides = {}) => {
+    const { channelAccessToken, isMock } = getEffectiveConfig(overrides);
+
+    if (isMock) {
+        console.log(`[MOCK] LINE broadcastMessage: ${text}`);
+        return { success: true, mode: 'mock', messageId: 'mock-broadcast-id-' + Date.now() };
+    }
+
+    try {
+        const url = 'https://api.line.me/v2/bot/message/broadcast';
+        const response = await axios.post(
+            url,
+            {
+                messages: [
+                    {
+                        type: 'text',
+                        text: text
+                    }
+                ]
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${channelAccessToken}`,
+                    'Content-Type': 'application/json',
+                    'X-Line-Retry-Key': require('crypto').randomUUID() // Must be a UUID
+                },
+            }
+        );
+        return { success: true, mode: 'real', data: response.data };
+    } catch (error) {
+        console.error('Error sending LINE broadcast:', error.response ? error.response.data : error.message);
+        throw new Error('Failed to send LINE broadcast');
+    }
+};
+
 module.exports = {
     sendMessage,
+    broadcastMessage,
     replyMessage,
     getUserProfile,
     handleWebhook,
